@@ -1,0 +1,85 @@
+%% Across rats analysis
+    % cd 'C:\Users\uggriffin\Downloads\GriffinCode-master (11.07.20)\GriffinCode-master\1. Matlab Pipeline';
+    % run 'Startup.m';
+clear;
+cd 'X:\01.Experiments\John n Andrew\Data and Exploratory\VTEs and Re suppression\Data without Ratdle';
+% load zlnIdPhi trials variable;
+load('data_zlnIdPhi_session');
+load('SWRtrialbytrial.mat');
+ 
+% Remove Ratticus
+zIdPhi_session(3,:)=[]; 
+trial_SWR_rates(3,:)=[];
+ 
+% Exclude first trials
+trial_SWR_rates_og = trial_SWR_rates;
+clear trial_SWR_rates
+trial_SWR_rates = [];
+zIdPhi_session_og = zIdPhi_session;
+clear zIdPhi_session
+zIdPhi_session = [];
+for rowi = 1:size(trial_SWR_rates_og,1)
+    for coli = 1:size(trial_SWR_rates_og,2)
+        trial_SWR_rates{rowi,coli} = trial_SWR_rates_og{rowi,coli}(2:end);
+        zIdPhi_session{rowi,coli} = zIdPhi_session_og{rowi,coli}(2:end);
+    end
+end
+clear trial_SWR_rates_og
+clear zIdPhi_session_og
+ 
+for rowi = 1:size(zIdPhi_session,1)
+    for coli = 1:size(zIdPhi_session,2)
+        idx_NonVTE = []; idx_VTE = [];
+        idx_NonVTE = find(zIdPhi_session{rowi,coli} < .57);
+        idx_VTE    = find(zIdPhi_session{rowi,coli} > .57);
+        SWR_VTE{rowi,coli} = trial_SWR_rates{rowi,coli}(idx_VTE);
+        SWR_NON{rowi,coli} = trial_SWR_rates{rowi,coli}(idx_NonVTE);
+    end
+end
+ 
+% average
+mean_SWR_vte = cellfun(@nanmean,SWR_VTE);
+mean_SWR_non = cellfun(@nanmean,SWR_NON);
+mean_SWR_nonCont = nanmean(mean_SWR_non(:,1:5),2);
+mean_SWR_vteCont = nanmean(mean_SWR_vte(:,1:5),2);
+mean_SWR_nonMusc = mean_SWR_non(:,6);
+mean_SWR_vteMusc = mean_SWR_vte(:,6);
+ 
+data{1} = mean_SWR_nonCont;
+data{2} = mean_SWR_vteCont;
+data{3} = mean_SWR_nonMusc;
+data{4} = mean_SWR_vteMusc;
+ 
+xLabels = [{'Control non-VTE'},{'Control VTE'},{'Muscimol non-VTE'},{'Muscimol VTE'}];
+yLabel  = 'SWR Rate (#/s)';
+b = multiBoxPlot(data,xLabels,yLabel,'fig_SWRconditionsRats_boxPlot');        
+ 
+% test effects
+p_SWRVTE_ranksum = [];
+ 
+% test  if control non vs control vte on SWRence
+[h,p_cont_nonVSvte,h,stat_cont_nonVSvte] = ttest2(data{1}, data{2});
+% test if muscimol non vs muscimol vte
+[h,p_musc_nonVSvte,h,stat_musc_nonVSvte] = ttest2(data{3}, data{4});
+% test VTE control vs muscimol
+[h,p_vte_contVSmusc,h,stat_vte_contVSmusc] = ttest2(data{2}, data{4});
+% test NON control vs muscimol
+[h,p_non_contVSmusc,h,stat_non_contVSmusc] = ttest2(data{1}, data{3});
+% test control non VTE to muscimol VTE
+[h,p_nonvte_contVSmusc,h,stat_nonvte_contVSmusc] = ttest2(data{1}, data{4});
+% test control VTE to muscimol non VTE
+[h,p_vtenon_contVSmusc,h,stat_vtenon_contVSmusc] = ttest2(data{2}, data{3});
+% combine ps
+p_SWRVTE_ranksum_pairwise = [p_cont_nonVSvte p_musc_nonVSvte p_vte_contVSmusc p_non_contVSmusc p_nonvte_contVSmusc p_vtenon_contVSmusc];
+ 
+% benjamini
+[alhpa.SWRVTE_ranksum,survive.SWRVTE_ranksum] = BenjaminiHochberg(p_SWRVTE_ranksum_pairwise,0.05);
+ 
+% effect size 
+d_14 = cohensD(data{1},data{4});
+d_13 = cohensD(data{1},data{3});
+d_12 = cohensD(data{1},data{2});
+d_23 = cohensD(data{2},data{3});
+d_24 = cohensD(data{2},data{4});
+d_34 = cohensD(data{3},data{4});
+
