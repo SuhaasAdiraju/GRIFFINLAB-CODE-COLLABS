@@ -1,0 +1,86 @@
+%% Collapsed across rat,trial,all control groups vs muscimol Fig
+    % cd 'C:\Users\uggriffin\Downloads\GriffinCode-master (11.07.20)\GriffinCode-master\1. Matlab Pipeline';
+    % run 'Startup.m';
+clear;
+cd 'X:\01.Experiments\John n Andrew\Data and Exploratory\VTEs and Re suppression\Data without Ratdle';
+% load zlnIdPhi trials variable;
+load('data_zlnIdPhi_session');
+load('SWRtrialbytrial.mat');
+ 
+% Remove Ratticus
+zIdPhi_session(3,:)=[]; 
+trial_SWR_rates(3,:)=[];
+ 
+% Exclude first trials
+trial_SWR_rates_og = trial_SWR_rates;
+clear trial_SWR_rates
+trial_SWR_rates = [];
+zIdPhi_session_og = zIdPhi_session;
+clear zIdPhi_session
+zIdPhi_session = [];
+for rowi = 1:size(trial_SWR_rates_og,1)
+    for coli = 1:size(trial_SWR_rates_og,2)
+        trial_SWR_rates{rowi,coli} = trial_SWR_rates_og{rowi,coli}(2:end);
+        zIdPhi_session{rowi,coli} = zIdPhi_session_og{rowi,coli}(2:end);
+    end
+end
+clear trial_SWR_rates_og
+clear zIdPhi_session_og
+ 
+% start to collapse
+SWRrates_acrosstrials = []; zIdPhi_acrosstrials = [];
+SWRrates_acrosstrials = cellcat(trial_SWR_rates,'horzcat','rows');
+zIdPhi_acrosstrials   = cellcat(zIdPhi_session,'vertcat','row');
+ 
+% get data in control and muscimol
+Rate_data_noMu = []; zIdPhi_data_noMu = []; Rate_data_mu = []; zIdPhi_data_mu = [];
+Rate_data_noMu  = horzcat(SWRrates_acrosstrials{:,1:5});
+zIdPhi_data_noMu = vertcat(zIdPhi_acrosstrials{:,1:5})';
+Rate_data_mu    = horzcat(SWRrates_acrosstrials{:,end});
+zIdPhi_data_mu   = vertcat(zIdPhi_acrosstrials{:,end})';
+ 
+% collapse across control conditions, xlabels: control non VTE, control
+% VTE, experimental VTE
+idxControl_NonVTE  = find(zIdPhi_data_noMu < 0.57);
+idxControl_VTE     = find(zIdPhi_data_noMu > 0.57);
+idxMuscimol_NonVTE = find(zIdPhi_data_mu < 0.57);
+idxMuscimol_VTE    = find(zIdPhi_data_mu > 0.57);
+ 
+% SWR Rate 
+sRate_control_nonVTE  = Rate_data_noMu(idxControl_NonVTE);
+sRate_control_VTE     = Rate_data_noMu(idxControl_VTE);
+sRate_muscimol_nonVTE = Rate_data_mu(idxMuscimol_NonVTE);
+sRate_muscimol_VTE    = Rate_data_mu(idxMuscimol_VTE);
+ 
+% data cell array
+sRate_conditions_array{1} = sRate_control_nonVTE;
+sRate_conditions_array{2} = sRate_control_VTE;
+sRate_conditions_array{3} = sRate_muscimol_nonVTE;
+sRate_conditions_array{4} = sRate_muscimol_VTE;
+ 
+% figure
+xLabels = [{'Control non-VTE'},{'Control VTE'},{'Muscimol non-VTE'},{'Muscimol VTE'}];
+yLabel  = 'SWRrate';
+b = multiBoxPlot(sRate_conditions_array,xLabels,yLabel,'fig_swrRateconditions_boxPlot');
+ 
+% test effects
+p_RateVTE_ranksum = [];
+ 
+% test  if control non vs control vte on PACence
+[p_cont_nonVSvte,h,stat_cont_nonVSvte] = ranksum(sRate_conditions_array{1}, sRate_conditions_array{2});
+% test if muscimol non vs muscimol vte
+[p_musc_nonVSvte,h,stat_musc_nonVSvte] = ranksum(sRate_conditions_array{3}, sRate_conditions_array{4});
+% test VTE control vs muscimol
+[p_vte_contVSmusc,h,stat_vte_contVSmusc] = ranksum(sRate_conditions_array{2}, sRate_conditions_array{4});
+% test NON control vs muscimol
+[p_non_contVSmusc,h,stat_non_contVSmusc] = ranksum(sRate_conditions_array{1}, sRate_conditions_array{3});
+% test control non VTE to muscimol VTE
+[p_nonvte_contVSmusc,h,stat_nonvte_contVSmusc] = ranksum(sRate_conditions_array{1}, sRate_conditions_array{4});
+% test control VTE to muscimol non VTE
+[p_vtenon_contVSmusc,h,stat_vtenon_contVSmusc] = ranksum(sRate_conditions_array{2}, sRate_conditions_array{3});
+% combine ps
+p_RateVTE_ranksum_pairwise = [p_cont_nonVSvte p_musc_nonVSvte p_vte_contVSmusc p_non_contVSmusc p_nonvte_contVSmusc p_vtenon_contVSmusc];
+ 
+% benjamini
+[alhpa.RateVTE_ranksum,survive.RateVTE_ranksum] = BenjaminiHochberg(p_RateVTE_ranksum_pairwise,0.05);
+
