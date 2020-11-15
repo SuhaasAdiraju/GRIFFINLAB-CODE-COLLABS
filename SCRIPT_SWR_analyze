@@ -1,0 +1,586 @@
+%% some preperation steps
+clear; clc;
+place2store = 'X:\01.Experiments\John n Andrew\Data and Exploratory\VTEs and Re suppression\Data without Ratdle';
+addpath(place2store)
+ 
+% run swr funs? Takes a while
+run_swr_fun = 1;
+ 
+% main Datafolder
+Datafolders   = 'X:\01.Experiments\RERh Inactivation Recording';
+ 
+% int name and vt name
+int_name     = 'Int_JS_fixed';
+vt_name      = 'VT1.mat';
+missing_data = 'interp'; % interpolate missing data
+ 
+% csc data names
+csc_hpc     = 'HPC'; 
+csc_compare = 'PFC';
+ 
+% linear position name
+linearSkel_name = 'linearSkeleton_returns_final';
+ 
+% phase bandpass
+swrParams.phase_bandpass = [150 250];
+swrParams.swr_stdevs = [4 1]; % our methods seem to be losing out on a bunch of ripples
+swrParams.gauss = 1;
+swrParams.InterRippleInterval = 0; % this is the time required between ripples. if ripple occurs within this time range (in sec),
+swrParams.mazePos = [2 7];
+swrParams.falsePositive = 'n';
+ 
+% preSmooth smooths the position data by 1 second
+preSmooth = 1; % 1 for yes, 0 for no
+ 
+% define middle of stem
+middleStemPosition = 500;
+ 
+% what orientation is the stem?
+stemOrientation = 'X'; % going forward in the x direction or y direction
+ 
+% rat names - this was confirmed using 'Behavior' excel sheet in henrys
+% folder. The 'Behavior' excel sheet was used to make fig8B in JNeuro paper
+% LEFT OFF: need to make 'Int_VTE_JS.mat' files in Morty folders
+rat{1} = 'Usher';
+rat{2} = 'Rick';
+rat{3} = 'Ratticus';
+%rat{4} = 'Ratdle';
+rat{4} = 'Eric2';
+rat{5} = '14-22';
+rat{6} = 'Morty';
+ 
+% condition
+Day_cond{1} = 'Saline';
+Day_cond{2} = 'Muscimol';
+Day_cond{3} = 'Baseline';
+ 
+% infusion treatment
+infusion{1} = '\Baseline';
+infusion{2} = '\Saline';
+infusion{3} = '\Muscimol'; % within day infusion
+ 
+%% get SWR data
+if run_swr_fun == 1
+    % loop across rats
+    for rat_i = 1:length(rat)
+ 
+        % datafolder for the rat
+        datafolder = [];
+        datafolder_rat = [Datafolders,'\',rat{rat_i}];
+ 
+        for day_cond_i = 1:length(Day_cond)
+ 
+            % datafolder that includes condition
+            datafolder_cond = [datafolder_rat,'\',Day_cond{day_cond_i}];
+ 
+            % get content in directory
+            dir_content = dir(datafolder_cond);
+            dir_content = extractfield(dir_content,'name');
+ 
+            % find non folders
+            remIdx = contains(dir_content,'.mat') | contains(dir_content,'.');
+ 
+            % remove .mat files
+            dir_content(remIdx)=[];
+ 
+            % loop across infusion conditions
+            for inf_i = 1:length(dir_content)
+ 
+                % define datafolder
+                datafolder = [datafolder_cond,'\',dir_content{inf_i}];
+ 
+                % the struct array below that organizes the data cannot create
+                % fields with space characters, therefore rename them if they
+                % exist.
+                if contains(dir_content{inf_i},'Baseline 1')
+                    dir_content{inf_i} = 'Baseline1';
+                elseif contains(dir_content{inf_i},'Baseline 2')
+                    dir_content{inf_i} = 'Baseline2';
+                end
+ 
+                % if rat has a '-' character in it, remove
+                if contains(rat{rat_i},'14-22')
+                    rat{rat_i} = 'rat1422';
+                end
+ 
+                % get swrs
+                [swr_rate.(rat{rat_i}).(Day_cond{day_cond_i}).(dir_content{inf_i}),...
+                swr_durations.(rat{rat_i}).(Day_cond{day_cond_i}).(dir_content{inf_i}),...
+                SWRcount.(rat{rat_i}).(Day_cond{day_cond_i}).(dir_content{inf_i}),...
+                SWRtimes.(rat{rat_i}).(Day_cond{day_cond_i}).(dir_content{inf_i})] = ...
+                extract_cleaned_swrs(datafolder,swrParams,csc_hpc,csc_compare,int_name,vt_name,missing_data,linearSkel_name);
+ 
+                % keep track of progress so we know matlab isn't frozen
+                disp(['Finished extracting and cleaning SWRs for ', ...
+                    rat{rat_i},' ',Day_cond{day_cond_i},' ', dir_content{inf_i}])
+ 
+                % restore appropriate naming for 14-22
+                if contains(rat{rat_i},'rat1422')
+                    rat{rat_i} = '14-22';
+                end
+ 
+            end       
+        end
+    end
+else
+    load('swrData')
+end
+   
+%% swr count
+rat{5} = 'rat1422';
+swrCountsTotals = []; swrRatesAvg = [];
+for rati = 1:length(rat)
+    % swrs
+    swrCountsTotals(rati,1) = sum(SWRcount.(rat{rati}).Baseline.Baseline1)/length(SWRcount.(rat{rati}).Baseline.Baseline1);
+    swrCountsTotals(rati,2) = sum(SWRcount.(rat{rati}).Baseline.Baseline2)/length(SWRcount.(rat{rati}).Baseline.Baseline2);  
+    swrCountsTotals(rati,3) = sum(SWRcount.(rat{rati}).Saline.Baseline)/length(SWRcount.(rat{rati}).Saline.Baseline);
+    swrCountsTotals(rati,4) = sum(SWRcount.(rat{rati}).Saline.Saline)/length(SWRcount.(rat{rati}).Saline.Saline);
+    swrCountsTotals(rati,5) = sum(SWRcount.(rat{rati}).Muscimol.Baseline)/length(SWRcount.(rat{rati}).Muscimol.Baseline);
+    swrCountsTotals(rati,6) = sum(SWRcount.(rat{rati}).Muscimol.Muscimol)/length(SWRcount.(rat{rati}).Muscimol.Muscimol);    
+ 
+    % swr rate
+    swrRatesAvg(rati,1) = mean(swr_rate.(rat{rati}).Baseline.Baseline1);
+    swrRatesAvg(rati,2) = mean(swr_rate.(rat{rati}).Baseline.Baseline2);  
+    swrRatesAvg(rati,3) = mean(swr_rate.(rat{rati}).Saline.Baseline);
+    swrRatesAvg(rati,4) = mean(swr_rate.(rat{rati}).Saline.Saline);
+    swrRatesAvg(rati,5) = mean(swr_rate.(rat{rati}).Muscimol.Baseline);
+    swrRatesAvg(rati,6) = mean(swr_rate.(rat{rati}).Muscimol.Muscimol);  
+    
+    % swr durations
+    swrDurTotals(rati,1) = nanmean(swr_durations.(rat{rati}).Baseline.Baseline1);
+    swrDurTotals(rati,2) = nanmean(swr_durations.(rat{rati}).Baseline.Baseline2);  
+    swrDurTotals(rati,3) = nanmean(swr_durations.(rat{rati}).Saline.Baseline);
+    swrDurTotals(rati,4) = nanmean(swr_durations.(rat{rati}).Saline.Saline);
+    swrDurTotals(rati,5) = nanmean(swr_durations.(rat{rati}).Muscimol.Baseline);
+    swrDurTotals(rati,6) = nanmean(swr_durations.(rat{rati}).Muscimol.Muscimol);     
+    
+end
+ 
+rat{5} = 'rat1422';
+trial_SWR_rates = []; trial_SWR_durs = [];
+for rati = 1:length(rat)
+    % trial-based distribution
+    trial_SWR_rates{rati,1}  = swr_rate.(rat{rati}).Baseline.Baseline1;
+    trial_SWR_rates{rati,2}  = swr_rate.(rat{rati}).Baseline.Baseline2;    
+    trial_SWR_rates{rati,3}  = swr_rate.(rat{rati}).Saline.Baseline;
+    trial_SWR_rates{rati,4}  = swr_rate.(rat{rati}).Saline.Saline;
+    trial_SWR_rates{rati,5}  = swr_rate.(rat{rati}).Muscimol.Baseline;
+    trial_SWR_rates{rati,6}  = swr_rate.(rat{rati}).Muscimol.Muscimol;  
+end
+ 
+rat{5} = 'rat1422';
+trial_SWR_durs = [];
+for rati = 1:length(rat)
+swr_durations.(rat{rati}).Baseline.Baseline1
+    % trial-based distribution
+    trial_SWR_durs{rati,1}  = swr_durations.(rat{rati}).Baseline.Baseline1;
+    trial_SWR_durs{rati,2}  = swr_durations.(rat{rati}).Baseline.Baseline1;    
+    trial_SWR_durs{rati,3}  = swr_durations.(rat{rati}).Baseline.Baseline1;
+    trial_SWR_durs{rati,4}  = swr_durations.(rat{rati}).Baseline.Baseline1;
+    trial_SWR_durs{rati,5}  = swr_durations.(rat{rati}).Baseline.Baseline1;
+    trial_SWR_durs{rati,6}  = swr_durations.(rat{rati}).Baseline.Baseline1;
+end
+%clearvars -except trial_SWR_durs trial_SWR_rates swrRatesAvg swrDurTotals swrCountsTotals
+%{
+cd(place2store);
+y_label = 'Normalized SWR count';
+disp_legend = 'n';
+small_fig = 'y';
+saveName = 'fig_normSWRcount';
+plot_data(swrCountsTotals,y_label,rat,disp_legend,small_fig,saveName);
+[h,p] = ttest(swrCountsTotals(:,5),swrCountsTotals(:,6))
+ 
+cd(place2store);
+y_label = 'Mean SWR rates (swr/sec)';
+disp_legend = 'n';
+small_fig = 'y';
+saveName = 'fig_meanSWRrates';
+plot_data(swrRatesAvg,y_label,rat,disp_legend,small_fig,saveName);
+[h,p] = ttest(swrRatesAvg(:,5),swrRatesAvg(:,6))
+swrRate_switch = swrRatesAvg';
+swrRate_setup  = swrRate_switch(:);
+ 
+% replace nan with zero
+swrDurTotals(isnan(swrDurTotals) == 1) = 0;
+cd(place2store);
+y_label = 'Mean SWR duration (ms)';
+disp_legend = 'n';
+small_fig = 'y';
+saveName = 'fig_meanSWRduration';
+plot_data(swrDurTotals,y_label,rat,disp_legend,small_fig,saveName);
+[h,p] = ttest(swrDurTotals(:,5),swrDurTotals(:,6))
+swrDur_switch = swrDurTotals';
+swrDur_setup  = swrDur_switch(:);
+%}
+%% for swr data, maybe a normalized score is better. What if a lot of swrs for one rat is not alot for another?
+grouping_idx = 1:2:length(swrDurTotals);
+normDiff.swrDur = normDiffScore(swrDurTotals,grouping_idx);
+%{
+%% Now combine this with the data from 
+clearvars -except rat Datafolders Day_cond inf_i
+ 
+rat{5} = '14-22';
+spkTimes = [];
+% loop across rats
+for rat_i = 1:length(rat)
+ 
+    % datafolder for the rat
+    datafolder = [];
+    datafolder_rat = [Datafolders,'\',rat{rat_i}];
+ 
+    for day_cond_i = 1:length(Day_cond)
+ 
+        % datafolder that includes condition
+        datafolder_cond = [datafolder_rat,'\',Day_cond{day_cond_i}];
+ 
+        % get content in directory
+        dir_content = dir(datafolder_cond);
+        dir_content = extractfield(dir_content,'name');
+ 
+        % find non folders
+        remIdx = contains(dir_content,'.mat') | contains(dir_content,'.');
+ 
+        % remove .mat files
+        dir_content(remIdx)=[];
+ 
+        % loop across infusion conditions
+        for inf_i = 1:length(dir_content)
+ 
+            % define datafolder
+            datafolder = [datafolder_cond,'\',dir_content{inf_i}];
+ 
+            % the struct array below that organizes the data cannot create
+            % fields with space characters, therefore rename them if they
+            % exist.
+            if contains(dir_content{inf_i},'Baseline 1')
+                dir_content{inf_i} = 'Baseline1';
+            elseif contains(dir_content{inf_i},'Baseline 2')
+                dir_content{inf_i} = 'Baseline2';
+            end
+ 
+            % if rat has a '-' character in it, remove
+            if contains(rat{rat_i},'14-22')
+                rat{rat_i} = 'rat1422';
+            end
+ 
+            % get swrs
+            [spkTimes.(rat{rat_i}).(Day_cond{day_cond_i}).(dir_content{inf_i})] ...
+                = get_spkTimes(datafolder,'TT');
+            
+            % keep track of progress so we know matlab isn't frozen
+            disp(['Finished extracting spike times for ', ...
+                rat{rat_i},' ',Day_cond{day_cond_i},' ', dir_content{inf_i}])
+ 
+            % restore appropriate naming for 14-22
+            if contains(rat{rat_i},'rat1422')
+                rat{rat_i} = '14-22';
+            end
+ 
+        end       
+    end
+end
+clearvars -except rat Datafolders Day_cond inf_i spkTimes
+load('data_swr_02secInterSWR_std2');
+ 
+% get spiking around ripples using spkTimes and SWRtimes
+exTimeCell = []; exSWRtimes = []; spikeTimes = [];
+exTimeCell = SWRtimes.Usher.Baseline.Baseline2;
+exSWRtimes = horzcat(exTimeCell{:});
+session    = spkTimes.Usher.Baseline.Baseline2;
+ 
+% onset of swr event
+eventTimes = [];
+for i = 1:length(exSWRtimes)
+    eventTimes(i) = exSWRtimes{i}(1);
+end
+ 
+for i = 1:length(session)
+ 
+    spikeTimes = session{i};
+    
+    % PETH function
+    %close all
+    timesAround = [0.5*1e6 0.5*1e6];
+    timeRes = 20;
+    timeScale = 'ms';
+    swrMod_test = 'y';
+    plotFig = 'y';
+    [FRsmooth,nAvg,FR,n,stats{i},shuffAvg_smooth,shuffAvg,shuffle_n] = ...
+        PETH(spikeTimes,eventTimes,timesAround,timeRes,timeScale,plotFig,swrMod_test);
+ 
+    numSpks(i) = numel(find(n == 1));
+    
+    % mod neuron
+    swr_mod(i) = stats{i}.swrMod_zTest_p;
+ 
+    if numSpks < 50
+        disp('Exclude')
+    end
+end
+%}
+ 
+%% VTE x SWR comparison analyses
+cd 'X:\01.Experiments\John n Andrew\Data and Exploratory\VTEs and Re suppression\Data without Ratdle'
+load ('data_zlnIdPhi_acrossTrials.mat')
+    zIdPhi_acrosstrials = zIdPhi_acrosstrials;
+    clear zIdPhi_trials
+load ('data_zlnIdPhi_session.mat')
+ 
+%% PropVTE x SWRrate/dur
+load ('data_propVTEs.mat')
+load ('SWRsessiontotals.mat')
+%load ('data_swrCounts.mat')
+ 
+% Concat data into vector
+        propVte_vec = propVTE(:);
+        SWRdurs_vec = swrDurTotals(:);
+        SWRrate_vec = swrRatesAvg(:);
+% Scatter Plot 
+    [Corr_fig1, Regression_fig1, summary_fig1] = scat_data(propVte_vec, SWRdurs_vec, [{'Proportion of VTEs'} {'SWR Durations'}])
+ 
+%% collapsed across rats, and trials, label as vte or not, compare SWR Rates x VTE or nonVTE between conditions
+    % cd 'C:\Users\uggriffin\Downloads\GriffinCode-master (11.07.20)\GriffinCode-master\1. Matlab Pipeline';
+    % run 'Startup.m';
+cd 'X:\01.Experiments\John n Andrew\Data and Exploratory\VTEs and Re suppression\Data without Ratdle';
+ 
+% load zlnIdPhi trials variable;
+load('data_zlnIdPhi_session')
+load('SWRtrialbytrial.mat')
+ 
+% only include 2:end trials (exclude first DA trial because both arms are
+% baited)
+trial_SWR_rates_og = trial_SWR_rates;
+clear trial_SWR_rates
+trial_SWR_rates = [];
+zIdPhi_session_og = zIdPhi_session;
+clear zIdPhi_session
+zIdPhi_session = [];
+for rowi = 1:size(trial_SWR_rates_og,1)
+    for coli = 1:size(trial_SWR_rates_og,2)
+        trial_SWR_rates{rowi,coli} = trial_SWR_rates_og{rowi,coli}(2:end);
+        zIdPhi_session{rowi,coli} = zIdPhi_session_og{rowi,coli}(2:end);
+    end
+end
+clear trial_SWR_rates_og
+clear zIdPhi_session_og
+ 
+% delete Ratticus - third row
+zIdPhi_session(3,:)=[]; 
+trial_SWR_rates(3,:)=[];
+ 
+% all trials collapsed for each condition, rats also collapsed in the process
+zIdPhi_acrosstrials = cellcat(zIdPhi_session,'vertcat','row');
+% match format of zI..._trials
+SWRrates_acrosstrials = cellcat(trial_SWR_rates,'horzcat','row');
+ 
+% match dimension
+for z = 1:length(SWRrates_acrosstrials)
+SWRrates_acrosstrials{z} = SWRrates_acrosstrials{z}';
+end
+ 
+% get scores above .57, you can use this to get swr durations/rates as long
+% as they're formatted the same - make a for loop to loop across conditions
+for coli = 1:length(zIdPhi_acrosstrials)
+    idxAbove{coli} = find(zIdPhi_acrosstrials{coli} > 0.57); % VTE
+    idxBelow{coli} = find(zIdPhi_acrosstrials{coli} < 0.57); % NON
+end
+ 
+%SWRrates_trials{1}(idxAbove{1});%test
+% grab ripple rates for corresponding idx values
+ 
+RatesVTE= []; %initialize index
+for z = 1:length(idxAbove)
+RatesVTE{z} =(SWRrates_acrosstrials{z}(idxAbove{z})); 
+end
+ 
+RatesNotVTE= []; %initialize index
+for z = 1:length(idxBelow)
+RatesNotVTE{z} =(SWRrates_acrosstrials{z}(idxBelow{z})); 
+end
+ 
+ 
+% data above threshold (VTEs)
+%zIdPhi_data_thresh = zIdPhi_data_all(idxGet);
+ 
+% 
+xLabels = [{'baseline1'} {'baseline2'} {'baseline'} {'saline'} {'baseline'} {'muscimol'}];
+multiBoxPlot(RatesVTE,xLabels,'# of SWR/s');
+title ('Rates among VTE occurances');
+ 
+xLabels = [{'baseline1'} {'baseline2'} {'baseline'} {'saline'} {'baseline'} {'muscimol'}];
+multiBoxPlot(RatesNotVTE,xLabels,'# of SWR/s');
+title ('Rates among Non VTE occurances');
+ 
+% Interleaved Fig 
+%% Collapsed across rat,trial,all control groups vs muscimol Fig
+    % cd 'C:\Users\uggriffin\Downloads\GriffinCode-master (11.07.20)\GriffinCode-master\1. Matlab Pipeline';
+    % run 'Startup.m';
+%cd 'X:\01.Experiments\John n Andrew\Data and Exploratory\VTEs and Re suppression\Data without Ratdle';
+ 
+% load zlnIdPhi trials variable;
+load('data_zlnIdPhi_session')
+load('SWRtrialbytrial.mat')
+ 
+% Remove Ratticus
+zIdPhi_session(3,:)=[]; 
+trial_SWR_rates(3,:)=[];
+ 
+% Exclude first trials
+trial_SWR_rates_og = trial_SWR_rates;
+clear trial_SWR_rates
+trial_SWR_rates = [];
+zIdPhi_session_og = zIdPhi_session;
+clear zIdPhi_session
+zIdPhi_session = [];
+for rowi = 1:size(trial_SWR_rates_og,1)
+    for coli = 1:size(trial_SWR_rates_og,2)
+        trial_SWR_rates{rowi,coli} = trial_SWR_rates_og{rowi,coli}(2:end);
+        zIdPhi_session{rowi,coli} = zIdPhi_session_og{rowi,coli}(2:end);
+    end
+end
+clear trial_SWR_rates_og
+clear zIdPhi_session_og
+ 
+% start to collapse
+SWRrates_acrosstrials = []; zIdPhi_acrosstrials = [];
+SWRrates_acrosstrials = cellcat(trial_SWR_rates,'horzcat','rows');
+zIdPhi_acrosstrials   = cellcat(zIdPhi_session,'vertcat','row');
+ 
+% get data in control and muscimol
+Rate_data_noMu = []; zIdPhi_data_noMu = []; Rate_data_mu = []; zIdPhi_data_mu = [];
+Rate_data_noMu  = horzcat(SWRrates_acrosstrials{:,1:5});
+zIdPhi_data_noMu = vertcat(zIdPhi_acrosstrials{:,1:5})';
+Rate_data_mu    = horzcat(SWRrates_acrosstrials{:,end});
+zIdPhi_data_mu   = vertcat(zIdPhi_acrosstrials{:,end})';
+ 
+% collapse across control conditions, xlabels: control non VTE, control
+% VTE, experimental VTE
+idxControl_NonVTE  = find(zIdPhi_data_noMu < 0.57);
+idxControl_VTE     = find(zIdPhi_data_noMu > 0.57);
+idxMuscimol_NonVTE = find(zIdPhi_data_mu < 0.57);
+idxMuscimol_VTE    = find(zIdPhi_data_mu > 0.57);
+ 
+% SWR Rate 
+sRate_control_nonVTE  = Rate_data_noMu(idxControl_NonVTE);
+sRate_control_VTE     = Rate_data_noMu(idxControl_VTE);
+sRate_muscimol_nonVTE = Rate_data_mu(idxMuscimol_NonVTE);
+sRate_muscimol_VTE    = Rate_data_mu(idxMuscimol_VTE);
+ 
+% data cell array
+sRate_conditions_array{1} = sRate_control_nonVTE;
+sRate_conditions_array{2} = sRate_control_VTE;
+sRate_conditions_array{3} = sRate_muscimol_nonVTE;
+sRate_conditions_array{4} = sRate_muscimol_VTE;
+ 
+% figure
+xLabels = [{'Control non-VTE'},{'Control VTE'},{'Muscimol non-VTE'},{'Muscimol VTE'}];
+yLabel  = 'SWRrate';
+b = multiBoxPlot(sRate_conditions_array,xLabels,yLabel,'fig_swrRateconditions_boxPlot');
+ 
+% test effects
+p_RateVTE_ranksum = [];
+ 
+% test  if control non vs control vte on PACence
+[p_cont_nonVSvte,h,stat_cont_nonVSvte] = ranksum(sRate_conditions_array{1}, sRate_conditions_array{2});
+% test if muscimol non vs muscimol vte
+[p_musc_nonVSvte,h,stat_musc_nonVSvte] = ranksum(sRate_conditions_array{3}, sRate_conditions_array{4});
+% test VTE control vs muscimol
+[p_vte_contVSmusc,h,stat_vte_contVSmusc] = ranksum(sRate_conditions_array{2}, sRate_conditions_array{4});
+% test NON control vs muscimol
+[p_non_contVSmusc,h,stat_non_contVSmusc] = ranksum(sRate_conditions_array{1}, sRate_conditions_array{3});
+% test control non VTE to muscimol VTE
+[p_nonvte_contVSmusc,h,stat_nonvte_contVSmusc] = ranksum(sRate_conditions_array{1}, sRate_conditions_array{4});
+% test control VTE to muscimol non VTE
+[p_vtenon_contVSmusc,h,stat_vtenon_contVSmusc] = ranksum(sRate_conditions_array{2}, sRate_conditions_array{3});
+% combine ps
+p_RateVTE_ranksum_pairwise = [p_cont_nonVSvte p_musc_nonVSvte p_vte_contVSmusc p_non_contVSmusc p_nonvte_contVSmusc p_vtenon_contVSmusc];
+% benjamini
+[alhpa.RateVTE_ranksum,survive.RateVTE_ranksum] = BenjaminiHochberg(p_RateVTE_ranksum_pairwise,0.05);
+
+ 
+%% Across rats analysis (CHECK FOR CORRECTNESS)
+
+        % cd 'C:\Users\uggriffin\Downloads\GriffinCode-master (11.07.20)\GriffinCode-master\1. Matlab Pipeline';
+        % run 'Startup.m';
+    clear;
+    cd 'X:\01.Experiments\John n Andrew\Data and Exploratory\VTEs and Re suppression\Data without Ratdle';
+    % load zlnIdPhi trials variable;
+    load('data_zlnIdPhi_session')
+    load('SWRtrialbytrial.mat')
+     
+    % Remove Ratticus
+    zIdPhi_session(3,:)=[]; 
+    trial_SWR_rates(3,:)=[];
+ 
+    % Exclude first trials
+    trial_SWR_rates_og = trial_SWR_rates;
+    clear trial_SWR_rates
+    trial_SWR_rates = [];
+    zIdPhi_session_og = zIdPhi_session;
+    clear zIdPhi_session
+    zIdPhi_session = [];
+    for rowi = 1:size(trial_SWR_rates_og,1)
+        for coli = 1:size(trial_SWR_rates_og,2)
+            trial_SWR_rates{rowi,coli} = trial_SWR_rates_og{rowi,coli}(2:end);
+            zIdPhi_session{rowi,coli} = zIdPhi_session_og{rowi,coli}(2:end);
+        end
+    end
+    clear trial_SWR_rates_og
+    clear zIdPhi_session_og
+ 
+    for rowi = 1:size(zIdPhi_session,1)
+        for coli = 1:size(zIdPhi_session,2)
+            idx_NonVTE = []; idx_VTE = [];
+            idx_NonVTE = find(zIdPhi_session{rowi,coli} < .57);
+            idx_VTE    = find(zIdPhi_session{rowi,coli} > .57);
+            SWR_VTE{rowi,coli} = trial_SWR_rates{rowi,coli}(idx_VTE);   
+            SWR_NON{rowi,coli} = trial_SWR_rates{rowi,coli}(idx_NonVTE);
+        end
+    end
+ 
+    % average
+    mean_SWR_vte = cellfun(@nanmean,SWR_VTE);
+    mean_SWR_non = cellfun(@nanmean,SWR_NON);
+    mean_SWR_nonCont = nanmean(mean_SWR_non(:,1:5),2);
+    mean_SWR_vteCont = nanmean(mean_SWR_vte(:,1:5),2);
+    mean_SWR_nonMusc = mean_SWR_non(:,6);
+    mean_SWR_vteMusc = mean_SWR_vte(:,6);
+ 
+    data{1} = mean_SWR_nonCont;
+    data{2} = mean_SWR_vteCont;
+    data{3} = mean_SWR_nonMusc;
+    data{4} = mean_SWR_vteMusc;
+ 
+    xLabels = [{'Control non-VTE'},{'Control VTE'},{'Muscimol non-VTE'},{'Muscimol VTE'}];
+    yLabel  = 'SWR Rate (#/s)';
+    b = multiBoxPlot(data,xLabels,yLabel,'fig_SWRconditionsRats_boxPlot');        
+ 
+    % test effects
+    p_SWRVTE_ranksum = [];
+ 
+    % test  if control non vs control vte on SWRence
+    [h,p_cont_nonVSvte,h,stat_cont_nonVSvte] = ttest2(data{1}, data{2});
+    % test if muscimol non vs muscimol vte
+    [h,p_musc_nonVSvte,h,stat_musc_nonVSvte] = ttest2(data{3}, data{4});
+    % test VTE control vs muscimol
+    [h,p_vte_contVSmusc,h,stat_vte_contVSmusc] = ttest2(data{2}, data{4});
+    % test NON control vs muscimol
+    [h,p_non_contVSmusc,h,stat_non_contVSmusc] = ttest2(data{1}, data{3});
+    % test control non VTE to muscimol VTE
+    [h,p_nonvte_contVSmusc,h,stat_nonvte_contVSmusc] = ttest2(data{1}, data{4});
+    % test control VTE to muscimol non VTE
+    [h,p_vtenon_contVSmusc,h,stat_vtenon_contVSmusc] = ttest2(data{2}, data{3});
+    % combine ps
+    p_SWRVTE_ranksum_pairwise = [p_cont_nonVSvte p_musc_nonVSvte p_vte_contVSmusc p_non_contVSmusc p_nonvte_contVSmusc p_vtenon_contVSmusc];
+ 
+    % benjamini
+    [alhpa.SWRVTE_ranksum,survive.SWRVTE_ranksum] = BenjaminiHochberg(p_SWRVTE_ranksum_pairwise,0.05);
+ 
+    % effect size 
+    d_14 = cohensD(data{1},data{4});
+    d_13 = cohensD(data{1},data{3});
+    d_12 = cohensD(data{1},data{2});
+    d_23 = cohensD(data{2},data{3});
+    d_24 = cohensD(data{2},data{4});
+    d_34 = cohensD(data{3},data{4});
+
