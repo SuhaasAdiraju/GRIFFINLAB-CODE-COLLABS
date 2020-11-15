@@ -1,0 +1,73 @@
+%% Collapsed across rats, and trials, label as vte or not, compare SWR Rates x VTE or nonVTE between conditions
+    % cd 'C:\Users\uggriffin\Downloads\GriffinCode-master (11.07.20)\GriffinCode-master\1. Matlab Pipeline';
+    % run 'Startup.m';
+clear;
+cd 'X:\01.Experiments\John n Andrew\Data and Exploratory\VTEs and Re suppression\Data without Ratdle';
+% load zlnIdPhi trials variable;
+load('data_zlnIdPhi_session')
+load('SWRtrialbytrial.mat')
+ 
+% only include 2:end trials (exclude first DA trial because both arms are
+% baited)
+trial_SWR_rates_og = trial_SWR_rates;
+clear trial_SWR_rates
+trial_SWR_rates = [];
+zIdPhi_session_og = zIdPhi_session;
+clear zIdPhi_session
+zIdPhi_session = [];
+for rowi = 1:size(trial_SWR_rates_og,1)
+    for coli = 1:size(trial_SWR_rates_og,2)
+        trial_SWR_rates{rowi,coli} = trial_SWR_rates_og{rowi,coli}(2:end);
+        zIdPhi_session{rowi,coli} = zIdPhi_session_og{rowi,coli}(2:end);
+    end
+end
+clear trial_SWR_rates_og
+clear zIdPhi_session_og
+ 
+% delete Ratticus - third row
+zIdPhi_session(3,:)=[]; 
+trial_SWR_rates(3,:)=[];
+ 
+% all trials collapsed for each condition, rats also collapsed in the process
+zIdPhi_acrosstrials = cellcat(zIdPhi_session,'vertcat','row');
+% match format of zI..._trials
+SWRrates_acrosstrials = cellcat(trial_SWR_rates,'horzcat','row');
+ 
+% match dimension
+for z = 1:length(SWRrates_acrosstrials)
+SWRrates_acrosstrials{z} = SWRrates_acrosstrials{z}';
+end
+ 
+% get scores above .57, you can use this to get swr durations/rates as long
+% as they're formatted the same - make a for loop to loop across conditions
+for coli = 1:length(zIdPhi_acrosstrials)
+    idxAbove{coli} = find(zIdPhi_acrosstrials{coli} > 0.57); % VTE
+    idxBelow{coli} = find(zIdPhi_acrosstrials{coli} < 0.57); % NON
+end
+ 
+%SWRrates_trials{1}(idxAbove{1});%test
+% grab ripple rates for corresponding idx values
+ 
+RatesVTE= []; %initialize index
+for z = 1:length(idxAbove)
+RatesVTE{z} =(SWRrates_acrosstrials{z}(idxAbove{z})); 
+end
+ 
+RatesNotVTE= []; %initialize index
+for z = 1:length(idxBelow)
+RatesNotVTE{z} =(SWRrates_acrosstrials{z}(idxBelow{z})); 
+end
+ 
+ 
+% data above threshold (VTEs)
+%zIdPhi_data_thresh = zIdPhi_data_all(idxGet);
+ 
+% 
+xLabels = [{'baseline1'} {'baseline2'} {'baseline'} {'saline'} {'baseline'} {'muscimol'}];
+multiBoxPlot(RatesVTE,xLabels,'# of SWR/s');
+title ('Rates among VTE occurances');
+ 
+xLabels = [{'baseline1'} {'baseline2'} {'baseline'} {'saline'} {'baseline'} {'muscimol'}];
+multiBoxPlot(RatesNotVTE,xLabels,'# of SWR/s');
+title ('Rates among Non VTE occurances');
+
